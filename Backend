@@ -1,0 +1,250 @@
+1. 📦 Backend Setup
+
+> Assuming you already have a basic Express.js project.
+
+
+
+🔄 Install Dependencies
+
+npm install express pg bcrypt jsonwebtoken dotenv cors
+
+
+---
+
+🗂 Directory Structure
+
+backend/
+├── db.js
+├── routes/
+│   └── auth.js
+├── middleware/
+│   └── authMiddleware.js
+├── server.js
+├── .env
+
+
+---
+
+✅ PostgreSQL Table: users
+
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL
+);
+
+
+---
+
+✏️ .env
+
+PORT=5000
+JWT_SECRET=yourSuperSecretKey
+DATABASE_URL=postgresql://user:password@localhost:5432/movieapp
+
+
+---
+
+🔧 db.js (PostgreSQL Pool Setup)
+
+const { Pool } = require('pg');
+require('dotenv').config();
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+module.exports = pool;
+
+
+---
+
+🧩 auth.js (Register & Login Routes)
+
+const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const pool = require('../db');
+require('dotenv').config();
+
+const router = express.Router();
+
+// Register
+router.post('/register', async (req, res) => {
+  const { username, email, password } = req.body;
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const user = await pool.query(
+      'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING *',
+      [username, email, hash]
+    );
+    res.status(201).json({ message: 'User registered' });
+  } catch (err) {
+    res.status(400).json({ error: 'Registration failed', details: err.message });
+  }
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
+
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: '2h',
+    });
+
+    res.json({ token, username: user.username });
+  } catch (err) {
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+module.exports = router;
+
+
+---
+
+🔌 server.js
+
+const express = require('express');
+const cors = require('cors');
+const authRoutes = require('./routes/auth');
+
+require('dotenv').config();
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/auth', authRoutes);
+
+app.listen(process.env.PORT, () => {
+  console.log(`Server running on http://localhost:${process.env.PORT}`);
+});
+
+
+---
+
+2. 🎨 Frontend Authentication (React)
+
+> Add two new components: Register.jsx and Login.jsx, and modify Navbar.jsx.
+
+
+
+
+---
+
+🔑 Register.jsx
+
+import { useState } from 'react';
+import axios from 'axios';
+
+export default function Register() {
+  const [form, setForm] = useState({ username: '', email: '', password: '' });
+  const [message, setMessage] = useState('');
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post('http://localhost:5000/api/auth/register', form);
+      setMessage('Registration successful. You can now log in.');
+    } catch (err) {
+      setMessage('Registration failed.');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h2>Register</h2>
+      <input name="username" placeholder="Username" onChange={handleChange} />
+      <input name="email" placeholder="Email" onChange={handleChange} />
+      <input name="password" type="password" placeholder="Password" onChange={handleChange} />
+      <button type="submit">Register</button>
+      <p>{message}</p>
+    </form>
+  );
+}
+
+
+---
+
+🔐 Login.jsx
+
+import { useState } from 'react';
+import axios from 'axios';
+
+export default function Login({ onLogin }) {
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/login', form);
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('username', res.data.username);
+      onLogin(res.data.username);
+    } catch {
+      setError('Invalid login credentials.');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h2>Login</h2>
+      <input name="email" placeholder="Email" onChange={handleChange} />
+      <input name="password" type="password" placeholder="Password" onChange={handleChange} />
+      <button type="submit">Login</button>
+      <p>{error}</p>
+    </form>
+  );
+}
+
+
+---
+
+🧭 Update Navbar.jsx to show Login/Register or Logout
+
+import { Link, useNavigate } from 'react-router-dom';
+
+export default function Navbar() {
+  const username = localStorage.getItem('username');
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate('/');
+  };
+
+  return (
+    <nav>
+      <h2>🎬 MovieApp</h2>
+      <div>
+        <Link to="/">Discover</Link>
+        <Link to="/favorites">Favorites</Link>
+        {!username ? (
+          <>
+            <Link to="/login">Login</Link>
+            <Link to="/register">Register</Link>
+          </>
+        ) : (
+          <>
+            <span>👋 {username}</span>
+            <button onClick={handleLogout}>Logout</button>
+          </>
+        )}
+      </div>
+    </nav>
+  );
+}
