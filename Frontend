@@ -1,0 +1,262 @@
+Tools & Tech Stack
+
+React.js (frontend library)
+
+TMDb API (movie data provider) – https://www.themoviedb.org/documentation/api
+
+CSS (or Tailwind CSS) for styling
+
+LocalStorage for saving favorites
+
+
+
+---
+
+🛠 Project Structure
+
+movie-app/
+├── public/
+├── src/
+│   ├── components/
+│   │   ├── MovieCard.jsx
+│   │   ├── MovieList.jsx
+│   │   ├── SearchBar.jsx
+│   │   └── Navbar.jsx
+│   ├── pages/
+│   │   ├── Home.jsx
+│   │   ├── Favorites.jsx
+│   ├── App.jsx
+│   └── main.jsx
+├── .env
+└── package.json
+
+
+---
+
+✅ Step-by-step Setup
+
+1. Initialize the Project
+
+npx create-react-app movie-app
+cd movie-app
+npm install axios react-router-dom
+
+2. Set Up TMDb API
+
+Create .env in root:
+
+REACT_APP_TMDB_API_KEY=your_tmdb_api_key
+
+
+---
+
+🔧 Components and Pages
+
+App.jsx (Routing)
+
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import Favorites from './pages/Favorites';
+import Navbar from './components/Navbar';
+
+function App() {
+  return (
+    <Router>
+      <Navbar />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/favorites" element={<Favorites />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
+
+
+---
+
+Navbar.jsx
+
+import { Link } from 'react-router-dom';
+
+export default function Navbar() {
+  return (
+    <nav className="nav">
+      <h2>🎬 MovieApp</h2>
+      <div>
+        <Link to="/">Discover</Link>
+        <Link to="/favorites">Favorites</Link>
+      </div>
+    </nav>
+  );
+}
+
+
+---
+
+Home.jsx
+
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import MovieList from '../components/MovieList';
+import SearchBar from '../components/SearchBar';
+
+export default function Home() {
+  const [movies, setMovies] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const fetchMovies = async (query) => {
+    const endpoint = query
+      ? `https://api.themoviedb.org/3/search/movie`
+      : `https://api.themoviedb.org/3/movie/popular`;
+    const { data } = await axios.get(endpoint, {
+      params: {
+        api_key: process.env.REACT_APP_TMDB_API_KEY,
+        query,
+      },
+    });
+    setMovies(data.results);
+  };
+
+  useEffect(() => {
+    fetchMovies();
+  }, []);
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    fetchMovies(query);
+  };
+
+  return (
+    <div>
+      <SearchBar onSearch={handleSearch} />
+      <MovieList movies={movies} />
+    </div>
+  );
+}
+
+
+---
+
+SearchBar.jsx
+
+import { useState } from 'react';
+
+export default function SearchBar({ onSearch }) {
+  const [query, setQuery] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSearch(query);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        placeholder="Search movies..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <button type="submit">🔍</button>
+    </form>
+  );
+}
+
+
+---
+
+MovieCard.jsx
+
+export default function MovieCard({ movie, onFavorite }) {
+  const { title, poster_path, vote_average } = movie;
+
+  const handleFavorite = () => {
+    const stored = JSON.parse(localStorage.getItem('favorites')) || [];
+    const updated = [...stored, movie];
+    localStorage.setItem('favorites', JSON.stringify(updated));
+    if (onFavorite) onFavorite(movie);
+  };
+
+  return (
+    <div className="card">
+      <img
+        src={`https://image.tmdb.org/t/p/w300${poster_path}`}
+        alt={title}
+      />
+      <h3>{title}</h3>
+      <p>⭐ {vote_average}</p>
+      <button onClick={handleFavorite}>❤️ Favorite</button>
+    </div>
+  );
+}
+
+
+---
+
+MovieList.jsx
+
+import MovieCard from './MovieCard';
+
+export default function MovieList({ movies }) {
+  return (
+    <div className="grid">
+      {movies.map((movie) => (
+        <MovieCard key={movie.id} movie={movie} />
+      ))}
+    </div>
+  );
+}
+
+
+---
+
+Favorites.jsx
+
+import { useEffect, useState } from 'react';
+import MovieList from '../components/MovieList';
+
+export default function Favorites() {
+  const [favorites, setFavorites] = useState([]);
+
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem('favorites')) || [];
+    setFavorites(stored);
+  }, []);
+
+  return (
+    <div>
+      <h2>Your Favorites ❤️</h2>
+      <MovieList movies={favorites} />
+    </div>
+  );
+}
+
+
+---
+
+🧑‍🎨 Styling Tips (Optional)
+
+Use index.css or Tailwind:
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem;
+  background: #222;
+  color: white;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.card {
+  background: #fff;
+  padding: 1rem;
+  border-radius: 10px;
+  text-align: center;
